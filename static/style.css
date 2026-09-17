@@ -1,26 +1,63 @@
 :root{
   --green:#0b6b3a;
-  --muted:#f6f7f8;
+  --muted:#eef7ee; /* light sage green background */
+  --danger: #c92a2a;
+  --warn: #d97706;
+  --ok: #15803d;
+  --quiet: #6b7280;
 }
-body{font-family:Inter, system-ui, Arial, sans-serif;background:var(--muted);color:#122;}
-.container{max-width:1000px;margin:24px auto;padding:0 16px}
-.site-header{background:white;border-bottom:1px solid #e6e6e6;padding:12px 0}
-.brand{color:var(--green);display:inline-block;margin:0}
+body{
+  font-family:Inter, system-ui, Arial, sans-serif;
+  background:var(--muted);
+  color:#122;
+  -webkit-font-smoothing:antialiased;
+}
+.container{max-width:1100px;margin:28px auto;padding:0 18px}
+.site-header{background:white;border-bottom:1px solid #e6e6e6;padding:14px 0}
+.brand{color:var(--green);display:inline-block;margin:0;font-weight:800;font-size:1.9rem;letter-spacing:0.5px}
 nav{float:right}
-nav a{margin-left:12px;color:#333;text-decoration:none}
-.hero{background:white;padding:32px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.05);margin-bottom:16px}
-.features{display:flex;gap:12px;margin-bottom:16px}
-.card{background:white;padding:16px;border-radius:8px;border:1px solid #eaeaea}
-.card h3{margin-top:0}
-.btn{display:inline-block;padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:white;color:#122;text-decoration:none}
+nav a{margin-left:12px;color:#333;text-decoration:none;padding:6px 10px;border-radius:6px}
+nav a:hover{background:#f3f4f6}
+.hero{background:white;padding:28px;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.04);margin-bottom:18px}
+.features{display:flex;gap:14px;margin-bottom:18px}
+.card{background:white;padding:20px;border-radius:10px;border:1px solid #ececec}
+.card h3{margin-top:0;font-size:1.05rem;color:#0f172a}
+.card p{color:#374151}
+.btn{display:inline-block;padding:8px 14px;border-radius:8px;border:1px solid #cfcfcf;background:white;color:#122;text-decoration:none;font-weight:600}
 .btn.primary{background:var(--green);color:white;border-color:var(--green)}
-.form-card{max-width:420px;margin:24px auto}
-label{display:block;margin-bottom:8px}
-input{padding:8px;border:1px solid #ddd;border-radius:6px;width:100%;box-sizing:border-box}
-table{width:100%;border-collapse:collapse;margin-top:8px}
-th,td{padding:8px;border-bottom:1px solid #f0f0f0;text-align:left}
-.stat{flex:1;text-align:center}
-.row{display:flex;gap:12px}
-.pagination{margin-top:8px}
-.site-footer{margin-top:32px;padding:12px;text-align:center;color:#666}
-@media(max-width:700px){.features{flex-direction:column}.row{flex-direction:column}}
+.btn:hover{filter:brightness(0.98);transform:translateY(-1px)}
+.btn[disabled],.btn.disabled{opacity:0.6;cursor:not-allowed;transform:none}
+.form-card{max-width:520px;margin:20px auto}
+label{display:block;margin-bottom:8px;font-weight:600;color:#0f172a}
+input,select,textarea{padding:10px;border:1px solid #e2e8f0;border-radius:8px;width:100%;box-sizing:border-box;margin-bottom:12px}
+table{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px}
+th,td{padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle}
+th{background:transparent;text-transform:uppercase;font-size:0.85rem;letter-spacing:0.02em;color:#374151}
+tbody tr:nth-child(odd){background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.6))}
+tbody tr:hover{background:#fbfdff}
+.stat{flex:1;text-align:center;padding:10px}
+.row{display:flex;gap:16px}
+.pagination{margin-top:10px;display:flex;gap:8px;align-items:center}
+.site-footer{margin-top:32px;padding:14px;text-align:center;color:#666}
+
+/* Table readability */
+.table-zebra tbody tr:nth-child(even){background:#ffffff}
+.table-zebra tbody tr:nth-child(odd){background:#fbfbfc}
+
+/* Status pill for batch tables: last column */
+#batch-table td:nth-child(5){text-align:left}
+#batch-table td:nth-child(5){display:flex;align-items:center}
+#batch-table td:nth-child(5)::before{content:'';display:inline-block;margin-right:8px;width:10px;height:10px;border-radius:999px;background:var(--quiet);}
+#batch-table td:nth-child(5){font-weight:700;color:#0f172a}
+
+/* color hints: user-visible colors need JS to map; provide neutral pill + colored left accent via pseudo-element using simple heuristics for keywords with attribute data not available */
+
+/* Buttons */
+.btn.small{padding:6px 10px;font-size:0.9rem}
+
+/* Nav links */
+.site-header nav a{color:#334155}
+
+/* Responsive: stack cards and ensure no overflow */
+@media(max-width:900px){.container{padding:0 14px}.features{flex-direction:column}.row{flex-direction:column}}
+@media(max-width:520px){th,td{padding:10px 8px;font-size:0.95rem}}
