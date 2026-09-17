@@ -56,5 +56,4 @@ API Endpoints
 - `PUT /api/batches/<id>` – update batch
 - `POST /api/medicines/<id>/dispense` – dispense quantity using FEFO
 - `GET /api/alerts/expiry?days=30` – expiry alerts
-# AIR_Auriga
-AI Assisted programming round project
+
