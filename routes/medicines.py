@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 from models import db, Medicine, Batch
 from flask_jwt_extended import jwt_required
 from datetime import datetime
+import re
+from flask import current_app
 
 meds_bp = Blueprint('medicines', __name__)
 
@@ -43,6 +45,47 @@ def list_medicines():
         meds = q.offset((page - 1) * limit).limit(limit).all()
         for m in meds:
             items.append({'id': m.id, 'name': m.name, 'generic_name': m.generic_name, 'manufacturer': m.manufacturer, 'sellable_stock': m.sellable_stock()})
+
+    total_pages = (total + limit - 1) // limit if limit > 0 else 1
+    return jsonify({'items': items, 'page': page, 'limit': limit, 'total': total, 'total_pages': total_pages})
+
+
+@meds_bp.route('/medicines/search', methods=['GET'])
+@jwt_required()
+def search_medicines():
+    # reuse listing logic but restrict to q param and return sellable_stock + in_date
+    q = request.args.get('q', '')
+    base_q = Medicine.query
+    if q:
+        base_q = base_q.filter((Medicine.name.ilike(f'%{q}%')) | (Medicine.generic_name.ilike(f'%{q}%')))
+
+    sort = request.args.get('sort', 'name')
+    order = request.args.get('order', 'asc')
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 10))
+
+    items = []
+    if sort == 'sellable_stock':
+        all_items = base_q.all()
+        with_stock = [(m, m.sellable_stock()) for m in all_items]
+        reverse = (order != 'asc')
+        with_stock.sort(key=lambda x: x[1], reverse=reverse)
+        total = len(with_stock)
+        start = (page - 1) * limit
+        page_slice = with_stock[start:start + limit]
+        for m, stock in page_slice:
+            items.append({'id': m.id, 'name': m.name, 'generic_name': m.generic_name, 'sellable_stock': stock, 'in_date': stock > 0})
+    else:
+        allowed_med_sorts = {'name', 'generic_name', 'manufacturer', 'created_at', 'id'}
+        qq = base_q
+        if sort in allowed_med_sorts and hasattr(Medicine, sort):
+            col = getattr(Medicine, sort)
+            qq = qq.order_by(col.asc() if order == 'asc' else col.desc())
+        total = qq.count()
+        meds = qq.offset((page - 1) * limit).limit(limit).all()
+        for m in meds:
+            stock = m.sellable_stock()
+            items.append({'id': m.id, 'name': m.name, 'generic_name': m.generic_name, 'sellable_stock': stock, 'in_date': stock > 0})
 
     total_pages = (total + limit - 1) // limit if limit > 0 else 1
     return jsonify({'items': items, 'page': page, 'limit': limit, 'total': total, 'total_pages': total_pages})
@@ -181,3 +224,113 @@ def create_batch(med_id):
     if expiry_date < _d.today():
         resp['warning'] = 'This batch is already expired and will not be sellable or dispensable.'
     return jsonify(resp), 201
+
+
+@meds_bp.route('/medicines/<int:med_id>/batches/import', methods=['POST'])
+@jwt_required()
+def import_batches(med_id):
+    m = Medicine.query.get(med_id)
+    if not m:
+        return jsonify({'msg': 'medicine not found'}), 404
+    data = request.get_json()
+    if not isinstance(data, list):
+        return jsonify({'msg': 'expected a JSON array of batch records'}), 400
+
+    imported = 0
+    deduped = 0
+    rejected = 0
+    errors = []
+    seen_batch_numbers = set()
+
+    for idx, row in enumerate(data):
+        batch_number = row.get('batch_number') if isinstance(row, dict) else None
+        quantity_raw = row.get('quantity') if isinstance(row, dict) else None
+        in_date_raw = row.get('in_date') if isinstance(row, dict) else None
+        expiry_raw = row.get('expiry_date') if isinstance(row, dict) else None
+
+        if not batch_number:
+            rejected += 1
+            errors.append({'row': idx, 'reason': 'missing batch_number'})
+            continue
+
+        # Normalize quantity: strip non-digits
+        q = None
+        try:
+            if isinstance(quantity_raw, int):
+                q = int(quantity_raw)
+            else:
+                qty_s = str(quantity_raw or '')
+                mch = re.search(r"(\d+)", qty_s)
+                if mch:
+                    q = int(mch.group(1))
+        except Exception:
+            q = None
+        if not q or q <= 0:
+            rejected += 1
+            errors.append({'row': idx, 'reason': 'invalid quantity'})
+            continue
+
+        # Parse expiry_date (ISO then dd/mm/YYYY)
+        expiry_date = None
+        try:
+            expiry_date = datetime.fromisoformat(expiry_raw).date()
+        except Exception:
+            try:
+                expiry_date = datetime.strptime(expiry_raw, '%d/%m/%Y').date()
+            except Exception:
+                expiry_date = None
+        if not expiry_date:
+            rejected += 1
+            errors.append({'row': idx, 'reason': 'invalid expiry_date'})
+            continue
+
+        # Parse in_date (ISO then dd/mm/YYYY). If missing, fall back to expiry_date to satisfy non-null model
+        in_date = None
+        if in_date_raw is None:
+            in_date = expiry_date
+        else:
+            try:
+                in_date = datetime.fromisoformat(in_date_raw).date()
+            except Exception:
+                try:
+                    in_date = datetime.strptime(in_date_raw, '%d/%m/%Y').date()
+                except Exception:
+                    in_date = None
+        if in_date is None:
+            rejected += 1
+            errors.append({'row': idx, 'reason': 'invalid in_date'})
+            continue
+
+        # Validate in_date <= expiry_date
+        if in_date and in_date > expiry_date:
+            rejected += 1
+            errors.append({'row': idx, 'reason': 'in_date after expiry_date'})
+            continue
+
+        # Dedupe: check existing DB and rows within this import
+        exists_db = Batch.query.filter_by(medicine_id=med_id, batch_number=batch_number).first()
+        if exists_db or batch_number in seen_batch_numbers:
+            deduped += 1
+            continue
+
+        # Insert
+        try:
+            b = Batch(medicine_id=med_id, batch_number=batch_number, quantity=q, in_date=in_date, expiry_date=expiry_date)
+            db.session.add(b)
+            # don't commit per-row; commit at end
+            seen_batch_numbers.add(batch_number)
+            imported += 1
+        except Exception as e:
+            current_app.logger.exception('failed to add batch')
+            rejected += 1
+            errors.append({'row': idx, 'reason': 'db error'})
+            continue
+
+    # commit all inserted rows
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'msg': 'failed to commit imported batches'}), 500
+
+    return jsonify({'imported': imported, 'deduped': deduped, 'rejected': rejected, 'errors': errors})

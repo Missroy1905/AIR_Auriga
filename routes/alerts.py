@@ -37,8 +37,8 @@ def run_clock():
         b.quarantined = True
         expired_count += 1
         db.session.add(b)
-    # expiring soon count (non-expired, not quarantined)
+    # expiring soon count (today <= expiry <= today+7) - count regardless of quarantine state
     end = today + timedelta(days=7)
-    expiring_soon = Batch.query.filter(Batch.expiry_date >= today, Batch.expiry_date <= end, Batch.quarantined == False).count()
+    expiring_soon = Batch.query.filter(Batch.expiry_date >= today, Batch.expiry_date <= end).count()
     db.session.commit()
     return jsonify({'expired_quarantined': expired_count, 'expiring_soon': expiring_soon})

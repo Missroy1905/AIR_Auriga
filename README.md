@@ -156,6 +156,7 @@ API Endpoints
 - `DELETE /api/medicines/<id>` – delete
 - `GET /api/medicines/<id>/batches` – list batches
 - `POST /api/medicines/<id>/batches` – create batch
+- `POST /api/medicines/<id>/batches/import` – import a JSON array of messy batch records (normalizes quantity/dates, dedupes, reports import summary)
 - `PUT /api/batches/<id>` – update batch
 - `POST /api/medicines/<id>/dispense` – dispense quantity using FEFO
 - `GET /api/alerts/expiry?days=30` – expiry alerts

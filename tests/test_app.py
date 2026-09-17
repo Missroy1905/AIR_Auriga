@@ -212,3 +212,62 @@ def test_reorder_outbox_created_on_threshold_breach(client):
     r = client.get('/api/outbox', headers={'Authorization': 'Bearer ' + token})
     data = r.get_json()
     assert data['total'] == 1
+
+
+def test_clock_idempotent_quarantine_and_counts(client):
+    token = get_token(client)
+    from datetime import date, timedelta
+    today = date.today()
+    # create medicine and batches
+    r = client.post('/api/medicines', json={'name': 'ClockMed'}, headers={'Authorization': 'Bearer ' + token})
+    mid = r.get_json()['id']
+    # expired non-quarantined batch
+    client.post(f'/api/medicines/{mid}/batches', json={'batch_number': 'EX', 'quantity': 5, 'in_date': (today-timedelta(days=30)).isoformat(), 'expiry_date': (today-timedelta(days=1)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+    # expiring in 3 days
+    client.post(f'/api/medicines/{mid}/batches', json={'batch_number': 'S3', 'quantity': 10, 'in_date': (today-timedelta(days=5)).isoformat(), 'expiry_date': (today+timedelta(days=3)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+    # safe batch far out
+    client.post(f'/api/medicines/{mid}/batches', json={'batch_number': 'OK', 'quantity': 20, 'in_date': (today-timedelta(days=5)).isoformat(), 'expiry_date': (today+timedelta(days=100)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+
+    # first clock run
+    r = client.post('/api/clock', headers={'Authorization': 'Bearer ' + token})
+    assert r.status_code == 200
+    body = r.get_json()
+    # at least the created expired batch should have been quarantined; expiring soon should be 1
+    assert body['expiring_soon'] == 1
+    # verify the expired batch is now quarantined by fetching medicine detail
+    r = client.get(f'/api/medicines/{mid}', headers={'Authorization': 'Bearer ' + token})
+    batches = r.get_json()['batches']
+    ex_batch = [b for b in batches if b['batch_number']=='EX'][0]
+    assert ex_batch['status'] == 'QUARANTINED' or ex_batch['status'] == 'EXPIRED' or getattr(ex_batch, 'status', None)
+
+    # second clock run (idempotency)
+    r = client.post('/api/clock', headers={'Authorization': 'Bearer ' + token})
+    assert r.status_code == 200
+    body2 = r.get_json()
+    # nothing new should be quarantined
+    assert body2['expired_quarantined'] == 0
+    assert body2['expiring_soon'] == 1
+
+
+def test_messy_batch_import(client):
+    token = get_token(client)
+    # create medicine with no prior batches of these numbers
+    r = client.post('/api/medicines', json={'name': 'ImportMed'}, headers={'Authorization': 'Bearer ' + token})
+    mid = r.get_json()['id']
+    payload = [
+        {"batch_number": "B5-1", "quantity": "50", "in_date": "01/03/2026", "expiry_date": "2026-12-01"},
+        {"batch_number": "B5-2", "quantity": "10 units", "in_date": None, "expiry_date": "15/01/2027"},
+        {"batch_number": "B5-1", "quantity": 50, "in_date": "2026-03-01", "expiry_date": "2026-12-01"},
+        {"batch_number": "B5-3", "quantity": "abc", "in_date": "2026-01-01", "expiry_date": "2026-06-01"},
+        {"batch_number": "B5-4", "quantity": 20, "in_date": "2026-01-01", "expiry_date": "not-a-date"}
+    ]
+    r = client.post(f'/api/medicines/{mid}/batches/import', json=payload, headers={'Authorization': 'Bearer ' + token})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['imported'] == 2
+    assert body['deduped'] == 1
+    assert body['rejected'] == 2
+    # errors should reference rows 3 and 4
+    reasons = {e['row']: e['reason'] for e in body['errors']}
+    assert 3 in reasons and reasons[3] == 'invalid quantity'
+    assert 4 in reasons and reasons[4] == 'invalid expiry_date'
