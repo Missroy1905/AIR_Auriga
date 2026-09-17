@@ -6,6 +6,24 @@ async function postJSON(url, data){
   return r.json().then(j=>({status:r.status, body:j}))
 }
 
+// update nav based on auth state
+function updateNavForAuth(){
+  const token = localStorage.getItem('token')
+  const login = document.getElementById('nav-login')
+  const reg = document.getElementById('nav-register')
+  const logout = document.getElementById('nav-logout')
+  if(login) login.style.display = token ? 'none' : ''
+  if(reg) reg.style.display = token ? 'none' : ''
+  if(logout) logout.style.display = token ? '' : 'none'
+}
+document.addEventListener('DOMContentLoaded', updateNavForAuth)
+// logout handler
+document.addEventListener('click', function(e){
+  if(e.target && e.target.id === 'nav-logout'){
+    e.preventDefault(); localStorage.removeItem('token'); updateNavForAuth(); window.location = '/login'
+  }
+})
+
 // Register
 const regForm = document.getElementById('register-form')
 if(regForm){
@@ -33,7 +51,13 @@ if(document.getElementById('med-table')){
   async function load(){
     const token=localStorage.getItem('token');
     const q=document.getElementById('search').value||''
-    const r = await fetch(`/api/medicines?page=${page}&limit=${limit}&sort=${encodeURIComponent(sort)}&order=${encodeURIComponent(order)}&search=${encodeURIComponent(q)}`,{headers:{'Authorization':'Bearer '+token}})
+    let url
+    if(q && q.length>0){
+      url = `/api/medicines/search?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}&sort=${encodeURIComponent(sort)}&order=${encodeURIComponent(order)}`
+    } else {
+      url = `/api/medicines?page=${page}&limit=${limit}&sort=${encodeURIComponent(sort)}&order=${encodeURIComponent(order)}`
+    }
+    const r = await fetch(url,{headers:{'Authorization':'Bearer '+token}})
     if(r.status===401){window.location='/login';return}
     const data = await r.json()
     document.getElementById('page').textContent=page
