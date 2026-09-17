@@ -22,6 +22,8 @@ def create_app(test_config=None):
     app.register_blueprint(meds_bp, url_prefix='/api')
     app.register_blueprint(batches_bp, url_prefix='/api')
     app.register_blueprint(alerts_bp, url_prefix='/api')
+    from routes.outbox import outbox_bp
+    app.register_blueprint(outbox_bp, url_prefix='/api')
 
     @app.route('/')
     def index():

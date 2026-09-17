@@ -146,3 +146,69 @@ def test_clock_quarantines_and_counts(client):
     assert r.status_code == 200
     body = r.get_json()
     assert 'expired_quarantined' in body and 'expiring_soon' in body
+
+
+def test_search_endpoint_with_sellable_and_in_date(client):
+    token = get_token(client)
+    from datetime import date, timedelta
+    today = date.today()
+    # create medicines
+    r = client.post('/api/medicines', json={'name': 'SearchOne'}, headers={'Authorization': 'Bearer ' + token})
+    m1 = r.get_json()['id']
+    r = client.post('/api/medicines', json={'name': 'SearchTwo'}, headers={'Authorization': 'Bearer ' + token})
+    m2 = r.get_json()['id']
+    r = client.post('/api/medicines', json={'name': 'SearchMixed'}, headers={'Authorization': 'Bearer ' + token})
+    m3 = r.get_json()['id']
+    # m1: expired-only
+    client.post(f'/api/medicines/{m1}/batches', json={'batch_number': 'E1', 'quantity': 10, 'in_date': (today-timedelta(days=30)).isoformat(), 'expiry_date': (today-timedelta(days=1)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+    # m2: in-date
+    client.post(f'/api/medicines/{m2}/batches', json={'batch_number': 'I1', 'quantity': 25, 'in_date': (today-timedelta(days=5)).isoformat(), 'expiry_date': (today+timedelta(days=20)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+    # m3: mixed
+    client.post(f'/api/medicines/{m3}/batches', json={'batch_number': 'MX1', 'quantity': 0, 'in_date': (today-timedelta(days=5)).isoformat(), 'expiry_date': (today+timedelta(days=20)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+    client.post(f'/api/medicines/{m3}/batches', json={'batch_number': 'MX2', 'quantity': 5, 'in_date': (today-timedelta(days=50)).isoformat(), 'expiry_date': (today+timedelta(days=2)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+
+    # search for 'Search' should return all three
+    r = client.get('/api/medicines/search?q=Search', headers={'Authorization': 'Bearer ' + token})
+    assert r.status_code == 200
+    data = r.get_json()
+    names = {it['name']: it for it in data['items']}
+    assert 'SearchOne' in names and 'SearchTwo' in names and 'SearchMixed' in names
+    # verify sellable and in_date
+    assert names['SearchOne']['sellable_stock'] == 0
+    assert names['SearchOne']['in_date'] is False
+    assert names['SearchTwo']['sellable_stock'] == 25
+    assert names['SearchTwo']['in_date'] is True
+    # SearchMixed has one batch with 5 sellable
+    assert names['SearchMixed']['sellable_stock'] == 5
+    assert names['SearchMixed']['in_date'] is True
+
+
+def test_reorder_outbox_created_on_threshold_breach(client):
+    token = get_token(client)
+    from datetime import date, timedelta
+    today = date.today()
+    # create medicine
+    r = client.post('/api/medicines', json={'name': 'ReorderMed'}, headers={'Authorization': 'Bearer ' + token})
+    mid = r.get_json()['id']
+    # set reorder_threshold to 20 using app context
+    app = client.application
+    from models import db, Medicine, Outbox
+    with app.app_context():
+        m = Medicine.query.get(mid)
+        m.reorder_threshold = 20
+        db.session.commit()
+    # add batches totalling 25
+    client.post(f'/api/medicines/{mid}/batches', json={'batch_number': 'R1', 'quantity': 25, 'in_date': (today-timedelta(days=2)).isoformat(), 'expiry_date': (today+timedelta(days=30)).isoformat()}, headers={'Authorization': 'Bearer ' + token})
+    # dispense 10 -> remaining 15 < threshold -> should create outbox
+    r = client.post(f'/api/medicines/{mid}/dispense', json={'quantity': 10}, headers={'Authorization': 'Bearer ' + token})
+    assert r.status_code == 200
+    # check outbox entries via API
+    r = client.get('/api/outbox', headers={'Authorization': 'Bearer ' + token})
+    data = r.get_json()
+    assert data['total'] == 1
+    # dispense again while still below threshold -> no new outbox
+    r = client.post(f'/api/medicines/{mid}/dispense', json={'quantity': 1}, headers={'Authorization': 'Bearer ' + token})
+    assert r.status_code == 200
+    r = client.get('/api/outbox', headers={'Authorization': 'Bearer ' + token})
+    data = r.get_json()
+    assert data['total'] == 1

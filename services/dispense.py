@@ -1,5 +1,6 @@
 from models import db, Batch, Medicine
 from datetime import date
+from models import Outbox
 
 
 def dispense_from_medicine(med_id, quantity):
@@ -41,4 +42,16 @@ def dispense_from_medicine(med_id, quantity):
         raise
 
     sellable_after = med.sellable_stock()
+    # create outbox notification if below threshold and no unresolved exists
+    try:
+        if sellable_after < getattr(med, 'reorder_threshold', 10):
+            exists = Outbox.query.filter_by(medicine_id=med.id, resolved=False).first()
+            if not exists:
+                msg = f"Low stock for {med.name}: {sellable_after} remaining (threshold {med.reorder_threshold})"
+                o = Outbox(medicine_id=med.id, message=msg)
+                db.session.add(o)
+                db.session.commit()
+    except Exception:
+        # avoid breaking dispensing if outbox creation fails; roll back outbox changes
+        db.session.rollback()
     return {'quantity_dispensed': quantity, 'medicine': {'id': med.id, 'name': med.name}, 'batches_used': used, 'sellable_stock_remaining': sellable_after}

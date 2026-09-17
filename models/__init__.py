@@ -17,6 +17,7 @@ class Medicine(db.Model):
     generic_name = db.Column(db.String(200), nullable=True)
     manufacturer = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reorder_threshold = db.Column(db.Integer, default=10, nullable=False)
 
     batches = db.relationship('Batch', backref='medicine', cascade='all, delete-orphan')
 
@@ -53,3 +54,12 @@ class Batch(db.Model):
         if today <= self.expiry_date <= (today + timedelta(days=7)):
             return 'EXPIRING SOON'
         return 'ACTIVE'
+
+
+class Outbox(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    medicine_id = db.Column(db.Integer, db.ForeignKey('medicine.id'), nullable=False)
+    message = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved = db.Column(db.Boolean, default=False, nullable=False)
+    medicine = db.relationship('Medicine', backref='outbox')
