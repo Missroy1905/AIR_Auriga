@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h2 id="med-name">Medicine</h2>
+  <div id="med-info"></div>
+  <h3>Batches</h3>
+  <table id="batch-table"><thead><tr><th>Batch</th><th>Qty</th><th>Expiry</th><th>Status</th></tr></thead><tbody></tbody></table>
+  <h3>Add Batch</h3>
+  <form id="add-batch">
+  <input name="batch_number" placeholder="Batch number" required>
+
+  <input name="quantity" type="number" min="1" placeholder="Quantity" required>
+
+  <label for="in-date">In-Date</label>
+  <input id="in-date" name="in_date" type="date" required>
+
+  <label for="expiry-date">Expiry Date</label>
+  <input id="expiry-date" name="expiry_date" type="date" required>
+
+  <button class="btn" type="submit">Add Batch</button>
+</form>
+  <h3>Dispense</h3>
+  <form id="dispense-form">
+    <input name="quantity" type="number" placeholder="Quantity" required>
+    <button class="btn primary" type="submit">Dispense</button>
+  </form>
+  <div id="dispense-result"></div>
+</div>
+<script>const MED_ID = {{ med_id }};</script>
+{% endblock %}

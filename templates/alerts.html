@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h2>Expiry Alerts</h2>
+  <label>Days <input id="days" type="number" value="30"></label>
+  <button id="load" class="btn">Load</button>
+  <table id="alerts-table"><thead><tr><th>Medicine</th><th>Batch</th><th>Qty</th><th>Expiry</th><th>Days</th></tr></thead><tbody></tbody></table>
+</div>
+{% endblock %}

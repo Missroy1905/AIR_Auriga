@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 db = SQLAlchemy()
 
@@ -24,7 +24,8 @@ class Medicine(db.Model):
         today = date.today()
         total = 0
         for b in self.batches:
-            if b.expiry_date >= today:
+            # sellable only if not expired, not quarantined and quantity > 0
+            if b.expiry_date >= today and getattr(b, 'quarantined', False) is False and (b.quantity or 0) > 0:
                 total += b.quantity
         return total
 
@@ -34,5 +35,21 @@ class Batch(db.Model):
     medicine_id = db.Column(db.Integer, db.ForeignKey('medicine.id'), nullable=False)
     batch_number = db.Column(db.String(120), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
+    in_date = db.Column(db.Date, nullable=False)
     expiry_date = db.Column(db.Date, nullable=False)
+    quarantined = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def status(self):
+        today = date.today()
+        # Expired takes precedence
+        if self.expiry_date < today:
+            return 'EXPIRED'
+        # Quarantined (but not expired)
+        if getattr(self, 'quarantined', False):
+            return 'QUARANTINED'
+        # Expiring soon within 7 days
+        if today <= self.expiry_date <= (today + timedelta(days=7)):
+            return 'EXPIRING SOON'
+        return 'ACTIVE'

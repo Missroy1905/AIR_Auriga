@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+  <section class="hero">
+    <h2>Smarter stock. Safer dispensing.</h2>
+    <p>Pharmadost helps pharmacists track medicine batches, maintain accurate sellable stock, dispense using FEFO, and stay ahead of expiry dates.</p>
+    <div class="cta">
+      <a class="btn primary" href="/login">Login</a>
+      <a class="btn" href="/register">Get Started</a>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="card">
+      <h3>Manage Batches</h3>
+      <p>Add and track batches with expiry dates, quantities and batch numbers.</p>
+    </div>
+    <div class="card">
+      <h3>FEFO Dispensing</h3>
+      <p>Dispense using First-Expiry-First-Out to reduce expired stock and waste.</p>
+    </div>
+    <div class="card">
+      <h3>Expiry Alerts</h3>
+      <p>Identify batches expiring soon to proactively manage inventory.</p>
+    </div>
+  </section>
+
+  <section class="next">
+    <h3>What we could build next</h3>
+    <ul>
+      <li>Barcode scanning for faster dispensing</li>
+      <li>Role-based access and audit trails</li>
+      <li>Automated reorder suggestions based on consumption</li>
+    </ul>
+  </section>
+{% endblock %}

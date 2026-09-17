@@ -4,3 +4,7 @@ __pycache__/
 .env
 .venv/
 venv/
+*.db
+instance/*.db
+__pycache__/
+*.pyc
